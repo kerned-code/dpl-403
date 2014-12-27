@@ -1,0 +1,170 @@
+/* Tucker Meyers: CS403 Programming Language Project
+ * BNF Grammar
+ * Version 4 (rewritten from scratch)
+ *
+ * Summary of Important Changes:
+ *  - Rearranged rules to match code and provide more logical order.
+ *  - Renamed some rules for better consistency and sense. For example,
+ *    I renamed the "block" rules to "control" rules and reused "block"
+ *    for generic blocks of expressions instead of control structures.
+ *  - Increased modularity of rules involving delimiters. The expressions
+ *    that must be surrounded by parentheses/brackets/braces are now
+ *    separately defined.
+ *  - Reworked my function-call rule (again), working out some logic 
+ *    errors and refining the requirements for interleaved calls.
+ */
+
+program : expression-list
+
+expression-list : expression
+                | expression expression-list
+
+optional-expression-list : *empty*
+                         | expression-list
+
+identifier-list : IDENTIFIER
+                | IDENTIFIER identifier-list
+
+optional-identifier-list : *empty*
+                         | identifier-list
+
+block : expression-list
+
+expression : primary
+           | control-expression
+           | definition-expression
+
+control-expression : LEFT-BRACE control RIGHT-BRACE
+
+            /* I had to use braces for control structures (as opposed to parentheses) because 
+             * using parentheses caused ambiguity with function calls, which are primaries. 
+             * Ideally, blocks *would* be function calls, but that would involve some significant 
+             * additional work at this point, because current control-structure notations don't 
+             * always conform to function call notations (either regular or interleaved). The 
+             * added work for controls or function calls or both would be difficult, and that 
+             * doesn't even include the need for delayed evaluation.
+             */
+
+definition-expression : LEFT-BRACKET definition RIGHT-BRACKET
+
+control : if-control
+        | while-control
+        | for-control
+
+if-control : IF expression block optional-else-control
+
+else-control : ELSE block
+
+optional-else-control : *empty*
+                      | else-control
+
+while-control : WHILE expression block
+
+for-control : FOR IDENTIFIER function-call block
+
+            /* The function call is assumed to be an iterator of sorts, whose values are assigned 
+             * to the identifier until the iterator runs out. I plan to provide at least one 
+             * built-in function for this purpose.
+             */
+
+definition : closure-definition
+           | function-definition
+           | class-definition
+           | variable-definition
+           | variable-redefinition
+
+closure-definition : CLOSURE optional-with optional-identifier-list COLON block
+
+            /* This expression produces an anonymous closure with the given parameters.
+             * The keyword 'with' is optional.
+             */
+
+function-definition : FUNCTION IDENTIFIER optional-with optional-identifier-list COLON block
+
+            /* This expression produces a closure with the given parameters and binds it
+             * to the name specified.
+             */
+
+class-definition : CLASS IDENTIFIER optional-with optional-identifier-list COLON block
+
+            /* This expression produces a closure with the given parameters and binds it to
+             * the name specified. A class closure secretly returns its internal scope instead
+             * of the last expression in the state closure body.
+             */
+
+optional-with : *empty*
+              | WITH
+
+variable-definition : BIND IDENTIFIER COLON expression
+
+variable-redefinition : REBIND IDENTIFIER COLON expression
+
+primary : function-call-expression
+        | INTEGER
+        | FLOATING-POINT NUMBER
+        | STRING
+        | BOOLEAN
+        | IDENTIFIER
+
+function-call-expression : LEFT-PARENTHESIS function-call RIGHT-PARENTHESIS
+
+function-call : expression
+              | expression COLON optional-expression-list
+              | expression expression-list
+
+            /* The first, <expression>, is a regular call with no arguments and the colon omitted.
+             * The second, <expression COLON optional-expression-list>, is a regular call with the 
+             *   colon and zero or more arguments.
+             * The third, <expression expression-list>, is an interleaved call (which must contain 
+             *   at least two elements). See below for details.
+             * 
+             * A function call may take four forms. 
+             *   1. Regular function call: 
+             *      (function-name: arg1 ...) 
+             *   2. Regular function call without arguments: 
+             *      (function-name:) or (function-name)
+             *   3. Interleaved infix: 
+             *      (arg1 f1 arg2 f2 ... fn-1 argn)
+             *   4. Interleaved prefix:
+             *      (f1 arg1 f2 arg2 ... fn argn)
+             *   where f1, f2, etc. are function-name parts (as in _f1_f2_) of interleaved functions.
+             *
+             * EXAMPLES: 
+             *   Signature: [function average-3 with a b c: ...]
+             *        Call: (average-3: 1 2 3)
+             *   Signature: [function println: ...]
+             *        Call: (println:) or 
+             *              (println)
+             *   Signature: [function sort_up? with list direction: ...]
+             *        Call: (sort_up?: my_list true) or 
+             *              (sort my_list up? true)
+             *   Signature: [function _get_ with obj member: ...]
+             *        Call: (_get_: my_obj member_name) or 
+             *              (my_obj get member_name)
+             *
+             * Important Details:
+             * - The first expression in a regular function call must evaluate to a closure.
+             * - Interleaved functions can take three forms:
+             *     1. _f1_..fn_ (all infix)
+             *     2.  f1_..fn_ (infix with prefix)
+             *     3. _f1_&     (extensible infix--see below)
+             *   I require that an interleaved function accept exactly as many positional parameters 
+             *     as it has underscores in its name. This allows my language to distinguish calls 
+             *     of form 1 or 3 from those of form 2, since a call in form 1 or 3 always has an 
+             *     odd number of elements and 2 has an even number. This means, unfortunately, that 
+             *     no postfix forms can be produced. The actual counting is not performed by my parser 
+             *     but will be handled later.
+             *   (I did some thought experiments with explicitly marking function-name parts as 
+             *     symbols, requiring that at least one argument is a non-identifier expression, 
+             *     etc., but all options I found seemed overly complicated or limiting.)
+             * - An extensible interleaved function is one whose name is of the form _op_&. It is 
+             *     "extensible" because it is permitted to follow it immediately with another infix 
+             *     function call without call nesting. For example, with the functions _+_& and _-_& 
+             *     (which I will build in), the following is legal: (1 + 5 - 3 + 4 + 9 - 1).
+             *     This can be evaluated even though _+_-_+_+_-_ is not defined. This extension process 
+             *     is strictly left-associative, however, so parenthetical nesting is encouraged 
+             *     in arithmetic expressions dealing with precedence of operations.
+             * - It is entirely permissible to give two different names to a single closure, such as 
+             *     one for interleaved parameters and one for better readability as a regular call.
+             * - Naturally, a closure with zero parameters cannot have a valid interleaved name.
+             */
