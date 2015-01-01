@@ -2,7 +2,7 @@
 
 This started out as my Designer Programming Language project for Dr. Lusth’s CS 403 class. I expect to keep refining and expanding it.
 
-My language does not yet have a name, partly because I lack the creativity to come up with something clever. I think of it as mostly like Scheme except for a much more idiosyncratic syntax (and not nearly as many features), but it also takes heavily after Dr. Lusth’s language [Scam](http://beastie.cs.ua.edu/scam/), and I developed the idea for interleaved function calls (more on those later) from a similar concept in AppleScript.
+My language does not yet have a name, because I haven’t had the motivation come up with something clever yet. I think of it as mostly like Scheme except for a much more idiosyncratic syntax (and not nearly as many features), but it also takes heavily after Dr. Lusth’s language [Scam](http://beastie.cs.ua.edu/scam/), and I developed the idea for interleaved function calls (more on those later) from a similar concept in AppleScript.
 
 ## The Program
 
